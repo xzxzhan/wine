@@ -19,10 +19,17 @@ class Wine(SQLModel, table=True):
 
 
 class WineVintage(SQLModel, table=True):
+    """A wine+vintage-year identity. Bottle size is NOT stored here: the same
+    wine+vintage can be priced in multiple formats (375ml, 750ml, magnum),
+    each with its own price, so bottle size lives on ReferencePrice/Listing.
+    """
+
     id: Optional[int] = Field(default=None, primary_key=True)
     wine_id: int = Field(foreign_key="wine.id")
     vintage_year: Optional[int] = None  # None = non-vintage (NV)
-    bottle_size_ml: int = 750
+    external_ref: Optional[str] = Field(default=None, index=True)
+    # Stable id from an automated source (e.g. "plumedhorse:3225"), used to
+    # re-match on re-ingestion without needing fuzzy text matching.
 
     wine: Wine = Relationship(back_populates="vintages")
     reference_prices: List["ReferencePrice"] = Relationship(back_populates="wine_vintage")
@@ -36,6 +43,9 @@ class ReferencePrice(SQLModel, table=True):
     price_type: str = "avg_retail"  # avg_retail | avg_auction
     price: float
     currency: str = "USD"
+    bottle_size_ml: int = 750
+    confidence: str = "medium"  # high | medium | low -- how sure we are this is the right wine/vintage
+    note: Optional[str] = None  # why confidence isn't "high", or match caveats
     date_captured: date = Field(default_factory=date.today)
 
     wine_vintage: WineVintage = Relationship(back_populates="reference_prices")
@@ -49,6 +59,7 @@ class Listing(SQLModel, table=True):
     raw_text: Optional[str] = None
     price: float
     currency: str = "USD"
+    bottle_size_ml: int = 750
     date_seen: date = Field(default_factory=date.today)
 
     wine_vintage: Optional[WineVintage] = Relationship(back_populates="listings")

@@ -19,6 +19,7 @@ def create_listing(
     source_type: str = Form(...),  # "auction" | "restaurant"
     price: float = Form(...),
     currency: str = Form("USD"),
+    bottle_size_ml: int = Form(750),
     raw_text: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
@@ -28,6 +29,7 @@ def create_listing(
         source_type=source_type,
         price=price,
         currency=currency,
+        bottle_size_ml=bottle_size_ml,
         raw_text=raw_text or None,
     )
     session.add(listing)

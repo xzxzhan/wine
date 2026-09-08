@@ -1,6 +1,7 @@
 import pytest
 
 from app.scoring import (
+    below_market_pct,
     discount_pct,
     expected_price,
     is_deal,
@@ -87,6 +88,26 @@ def test_score_listing_restaurant_deal_below_expected_markup():
         source_type="restaurant",
     )
     assert score.is_deal is True
+
+
+def test_below_market_pct_positive_when_cheaper_than_retail():
+    # Silver Oak 2015 example: $96 listing vs $135 WS retail
+    pct = below_market_pct(96.0, 750, 135.0, 750)
+    assert pct == pytest.approx((135.0 - 96.0) / 135.0)
+    assert pct > 0
+
+
+def test_below_market_pct_negative_when_marked_up_over_retail():
+    # typical restaurant case: priced above raw retail
+    pct = below_market_pct(115.0, 750, 93.0, 750)
+    assert pct < 0
+
+
+def test_below_market_pct_normalizes_bottle_sizes():
+    # half-bottle listing vs a 750ml reference
+    pct = below_market_pct(44.0, 375, 67.0, 750)
+    listing_750 = 88.0
+    assert pct == pytest.approx((67.0 - listing_750) / 67.0)
 
 
 def test_score_listing_normalizes_bottle_sizes_independently():

@@ -1,43 +1,77 @@
 {% extends "base.html" %}
-{% block title %}Deals{% endblock %}
+{% block title %}Underpriced Wines{% endblock %}
 {% block content %}
-<h1>Deals</h1>
-<table>
-  <thead>
-    <tr>
-      <th>Wine</th>
-      <th>Source</th>
-      <th>Type</th>
-      <th>Listing price</th>
-      <th>Reference price</th>
-      <th>Expected price</th>
-      <th>Discount</th>
-      <th>Deal?</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for row in rows %}
-    <tr class="{{ 'deal' if row.status == 'scored' and row.score.is_deal else '' }}">
-      {% if row.status == 'scored' %}
-        <td>{{ row.vintage.wine.producer }} {{ row.vintage.wine.wine_name }} {{ row.vintage.vintage_year or 'NV' }}</td>
-        <td>{{ row.listing.source }}</td>
-        <td>{{ row.listing.source_type }}</td>
-        <td>{{ "%.2f"|format(row.score.listing_price_750) }} {{ row.listing.currency }}</td>
-        <td>{{ "%.2f"|format(row.score.reference_price_750) }} {{ row.reference.currency }} ({{ row.reference.price_type }})</td>
-        <td>{{ "%.2f"|format(row.score.expected_price_750) }}</td>
-        <td>{{ "%.1f"|format(row.score.discount_pct * 100) }}%</td>
-        <td>{{ "YES" if row.score.is_deal else "" }}</td>
-      {% elif row.status == 'no_reference' %}
-        <td>{{ row.vintage.wine.producer }} {{ row.vintage.wine.wine_name }} {{ row.vintage.vintage_year or 'NV' }}</td>
-        <td>{{ row.listing.source }}</td>
-        <td>{{ row.listing.source_type }}</td>
-        <td>{{ "%.2f"|format(row.listing.price) }} {{ row.listing.currency }}</td>
-        <td colspan="4">no reference price yet</td>
-      {% else %}
-        <td colspan="8">unmatched listing: {{ row.listing.raw_text or row.listing.source }}</td>
-      {% endif %}
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="deals-header">
+  <h1>Underpriced Wines &mdash; Plumed Horse</h1>
+  <form method="post" action="/refresh">
+    <button type="submit">Refresh from Plumed Horse</button>
+  </form>
+</div>
+<p class="subtitle">Comparing Plumed Horse's current wine list against Wine-Searcher's average retail price. "Below market" means the restaurant is charging <em>less</em> than Wine-Searcher's average retail &mdash; not adjusted for any expected restaurant markup.</p>
+
+<section>
+  <h2>Below market price ({{ below_market|length }})</h2>
+  {% if below_market %}
+  <table>
+    <thead>
+      <tr><th>Wine</th><th>List price</th><th>WS reference</th><th>Below market by</th><th>Confidence</th></tr>
+    </thead>
+    <tbody>
+    {% for row in below_market %}
+      <tr class="deal">
+        <td>{{ row.listing.raw_text or (row.vintage.wine.producer ~ " " ~ row.vintage.wine.wine_name) }}</td>
+        <td>${{ "%.2f"|format(row.listing.price) }}{% if row.listing.bottle_size_ml != 750 %} ({{ row.listing.bottle_size_ml }}ml){% endif %}</td>
+        <td>${{ "%.2f"|format(row.reference.price) }}{% if row.reference.bottle_size_ml != 750 %} ({{ row.reference.bottle_size_ml }}ml){% endif %}</td>
+        <td class="pct">{{ "%.1f"|format(row.pct_below_market * 100) }}%</td>
+        <td><span class="badge {{ row.reference.confidence }}">{{ row.reference.confidence }}</span>{% if row.reference.note %}<div class="note">{{ row.reference.note }}</div>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No wines currently priced below Wine-Searcher's average retail.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>At or above market price ({{ above_market|length }})</h2>
+  <details>
+    <summary>Show {{ above_market|length }} wines</summary>
+    <table>
+      <thead>
+        <tr><th>Wine</th><th>List price</th><th>WS reference</th><th>Vs. market</th><th>Confidence</th></tr>
+      </thead>
+      <tbody>
+      {% for row in above_market %}
+        <tr>
+          <td>{{ row.listing.raw_text or (row.vintage.wine.producer ~ " " ~ row.vintage.wine.wine_name) }}</td>
+          <td>${{ "%.2f"|format(row.listing.price) }}{% if row.listing.bottle_size_ml != 750 %} ({{ row.listing.bottle_size_ml }}ml){% endif %}</td>
+          <td>${{ "%.2f"|format(row.reference.price) }}{% if row.reference.bottle_size_ml != 750 %} ({{ row.reference.bottle_size_ml }}ml){% endif %}</td>
+          <td class="pct">{{ "%.1f"|format(row.pct_below_market * 100) }}%</td>
+          <td><span class="badge {{ row.reference.confidence }}">{{ row.reference.confidence }}</span>{% if row.reference.note %}<div class="note">{{ row.reference.note }}</div>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+
+<section>
+  <h2>Needs review ({{ needs_review|length }})</h2>
+  <details>
+    <summary>Show {{ needs_review|length }} wines without a usable Wine-Searcher reference</summary>
+    <table>
+      <thead><tr><th>Wine</th><th>List price</th><th>Why</th></tr></thead>
+      <tbody>
+      {% for row in needs_review %}
+        <tr>
+          <td>{{ row.listing.raw_text or "unknown" }}</td>
+          <td>${{ "%.2f"|format(row.listing.price) }}</td>
+          <td>{{ "no matching wine record" if row.reason == "unmatched" else "no Wine-Searcher reference price found" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
 {% endblock %}

@@ -17,6 +17,7 @@ def create_reference_price(
     currency: str = Form("USD"),
     price_type: str = Form("avg_retail"),
     source: str = Form("wine-searcher"),
+    bottle_size_ml: int = Form(750),
     session: Session = Depends(get_session),
 ):
     ref = ReferencePrice(
@@ -25,6 +26,7 @@ def create_reference_price(
         currency=currency,
         price_type=price_type,
         source=source,
+        bottle_size_ml=bottle_size_ml,
     )
     session.add(ref)
     session.commit()

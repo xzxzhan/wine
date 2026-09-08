@@ -75,6 +75,24 @@ def score_listing(
     )
 
 
+def below_market_pct(
+    listing_price: float,
+    listing_bottle_size_ml: int,
+    reference_price: float,
+    reference_bottle_size_ml: int,
+) -> float:
+    """How far below the raw Wine-Searcher reference price a listing is.
+
+    Unlike score_listing(), this applies no restaurant-markup assumption --
+    it's a literal "is this priced below market" comparison. Positive means
+    the listing is cheaper than the Wine-Searcher reference; negative means
+    it's marked up over it (the normal case for a restaurant wine list).
+    """
+    listing_750 = normalize_to_750ml(listing_price, listing_bottle_size_ml)
+    reference_750 = normalize_to_750ml(reference_price, reference_bottle_size_ml)
+    return discount_pct(listing_750, reference_750)
+
+
 def best_reference_price(reference_prices: list) -> Optional[object]:
     """Pick the most recent reference price when several exist for a vintage."""
     if not reference_prices:

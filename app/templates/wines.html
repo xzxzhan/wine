@@ -10,7 +10,6 @@
     <label>Wine name <input name="wine_name" required></label>
     <label>Region <input name="region"></label>
     <label>Vintage year <input name="vintage_year" placeholder="blank = NV"></label>
-    <label>Bottle size (ml) <input name="bottle_size_ml" type="number" value="750"></label>
     <button type="submit">Add</button>
   </form>
 </section>
@@ -28,6 +27,7 @@
     </label>
     <label>Price <input name="price" type="number" step="0.01" required></label>
     <label>Currency <input name="currency" value="USD"></label>
+    <label>Bottle size (ml) <input name="bottle_size_ml" type="number" value="750"></label>
     <label>Type
       <select name="price_type">
         <option value="avg_retail">avg retail</option>
@@ -55,6 +55,7 @@
     <label>Source name <input name="source" placeholder="e.g. klwines-auction or restaurant:French Laundry" required></label>
     <label>Price <input name="price" type="number" step="0.01" required></label>
     <label>Currency <input name="currency" value="USD"></label>
+    <label>Bottle size (ml) <input name="bottle_size_ml" type="number" value="750"></label>
     <label>Raw text <input name="raw_text" placeholder="original line, optional"></label>
     <button type="submit">Add listing</button>
   </form>
@@ -73,7 +74,7 @@
         <td>{{ wine.region or "" }}</td>
         <td>
           {% for v in vintages_by_wine[wine.id] %}
-            {{ v.vintage_year or "NV" }}{% if v.bottle_size_ml != 750 %} ({{ v.bottle_size_ml }}ml){% endif %}{% if not loop.last %}, {% endif %}
+            {{ v.vintage_year or "NV" }}{% if not loop.last %}, {% endif %}
           {% endfor %}
         </td>
       </tr>

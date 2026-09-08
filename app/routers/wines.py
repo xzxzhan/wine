@@ -28,10 +28,7 @@ def list_wines(request: Request, session: Session = Depends(get_session)):
     for wine in wines:
         for vintage in vintages_by_wine[wine.id]:
             year_label = vintage.vintage_year or "NV"
-            size_label = (
-                "" if vintage.bottle_size_ml == 750 else f" ({vintage.bottle_size_ml}ml)"
-            )
-            label = f"{wine.producer} {wine.wine_name} {year_label}{size_label}"
+            label = f"{wine.producer} {wine.wine_name} {year_label}"
             all_vintages.append({"id": vintage.id, "label": label})
 
     return templates.TemplateResponse(
@@ -51,7 +48,6 @@ def create_wine(
     wine_name: str = Form(...),
     region: Optional[str] = Form(None),
     vintage_year: Optional[str] = Form(None),
-    bottle_size_ml: int = Form(750),
     session: Session = Depends(get_session),
 ):
     norm = normalize_name(producer, wine_name)
@@ -72,13 +68,10 @@ def create_wine(
         select(WineVintage).where(
             WineVintage.wine_id == wine.id,
             WineVintage.vintage_year == year,
-            WineVintage.bottle_size_ml == bottle_size_ml,
         )
     ).first()
     if vintage is None:
-        vintage = WineVintage(
-            wine_id=wine.id, vintage_year=year, bottle_size_ml=bottle_size_ml
-        )
+        vintage = WineVintage(wine_id=wine.id, vintage_year=year)
         session.add(vintage)
         session.commit()
 
