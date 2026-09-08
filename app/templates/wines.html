@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Wines{% endblock %}
+{% block content %}
+<h1>Wines</h1>
+
+<section>
+  <h2>Add a wine + vintage</h2>
+  <form method="post" action="/wines">
+    <label>Producer <input name="producer" required></label>
+    <label>Wine name <input name="wine_name" required></label>
+    <label>Region <input name="region"></label>
+    <label>Vintage year <input name="vintage_year" placeholder="blank = NV"></label>
+    <label>Bottle size (ml) <input name="bottle_size_ml" type="number" value="750"></label>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+{% if all_vintages %}
+<section>
+  <h2>Add a reference price (Wine-Searcher)</h2>
+  <form method="post" action="/reference-prices">
+    <label>Wine / vintage
+      <select name="wine_vintage_id" required>
+        {% for v in all_vintages %}
+        <option value="{{ v.id }}">{{ v.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Price <input name="price" type="number" step="0.01" required></label>
+    <label>Currency <input name="currency" value="USD"></label>
+    <label>Type
+      <select name="price_type">
+        <option value="avg_retail">avg retail</option>
+        <option value="avg_auction">avg auction</option>
+      </select>
+    </label>
+    <button type="submit">Add reference price</button>
+  </form>
+
+  <h2>Add a listing (auction / restaurant)</h2>
+  <form method="post" action="/listings">
+    <label>Wine / vintage
+      <select name="wine_vintage_id" required>
+        {% for v in all_vintages %}
+        <option value="{{ v.id }}">{{ v.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Source type
+      <select name="source_type">
+        <option value="auction">auction</option>
+        <option value="restaurant">restaurant</option>
+      </select>
+    </label>
+    <label>Source name <input name="source" placeholder="e.g. klwines-auction or restaurant:French Laundry" required></label>
+    <label>Price <input name="price" type="number" step="0.01" required></label>
+    <label>Currency <input name="currency" value="USD"></label>
+    <label>Raw text <input name="raw_text" placeholder="original line, optional"></label>
+    <button type="submit">Add listing</button>
+  </form>
+</section>
+{% endif %}
+
+<section>
+  <h2>Existing wines</h2>
+  <table>
+    <thead><tr><th>Producer</th><th>Wine</th><th>Region</th><th>Vintages</th></tr></thead>
+    <tbody>
+    {% for wine in wines %}
+      <tr>
+        <td>{{ wine.producer }}</td>
+        <td>{{ wine.wine_name }}</td>
+        <td>{{ wine.region or "" }}</td>
+        <td>
+          {% for v in vintages_by_wine[wine.id] %}
+            {{ v.vintage_year or "NV" }}{% if v.bottle_size_ml != 750 %} ({{ v.bottle_size_ml }}ml){% endif %}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
