@@ -68,8 +68,13 @@ def parse_product_name(raw_name: str) -> tuple[Optional[int], str, str]:
 
     before_comma = rest_display.split(",", 1)[0]
     words = before_comma.split()
-    producer = " ".join(words[:2]) if len(words) > 2 else before_comma
-    wine_name = rest_display[len(producer):].strip(" ,") or rest_display
+    if len(words) >= 3:
+        producer = " ".join(words[:2])
+    elif len(words) == 2:
+        producer = words[0]
+    else:
+        producer = before_comma
+    wine_name = rest_display[len(producer):].strip(" ,\"“”") or rest_display
 
     return vintage_year, producer or "Unknown", wine_name or rest_display
 

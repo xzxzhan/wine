@@ -13,6 +13,8 @@ tr.deal { background: #e8f5e9; }
 .deals-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
 .deals-header form { margin: 0; }
 .subtitle { color: #555; max-width: 60em; }
+.summary { color: #444; font-weight: 600; }
+.error-banner { background: #fbe0e0; color: #9c3030; padding: 0.6rem 1rem; border-radius: 4px; }
 .pct { font-weight: 600; }
 tr.deal .pct { color: #1b6b2c; }
 .empty { color: #777; font-style: italic; }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -28,10 +29,13 @@ def _latest_listing_per_vintage(session: Session) -> list[Listing]:
 
 
 @router.get("/deals")
-def list_deals(request: Request, session: Session = Depends(get_session)):
+def list_deals(request: Request, session: Session = Depends(get_session), error: str = ""):
     below_market, above_market, needs_review = [], [], []
 
-    for listing in _latest_listing_per_vintage(session):
+    latest_listings = _latest_listing_per_vintage(session)
+    last_refreshed = max((l.date_seen for l in latest_listings), default=None)
+
+    for listing in latest_listings:
         vintage = session.get(WineVintage, listing.wine_vintage_id) if listing.wine_vintage_id else None
         if vintage is None:
             needs_review.append({"listing": listing, "reason": "unmatched"})
@@ -71,11 +75,19 @@ def list_deals(request: Request, session: Session = Depends(get_session)):
             "below_market": below_market,
             "above_market": above_market,
             "needs_review": needs_review,
+            "last_refreshed": last_refreshed,
+            "error": error,
         },
     )
 
 
 @router.post("/refresh")
 def refresh():
-    refresh_plumedhorse()
+    try:
+        refresh_plumedhorse()
+    except httpx.HTTPError as e:
+        return RedirectResponse(
+            url=f"/deals?error=Could+not+reach+Plumed+Horse+({type(e).__name__})",
+            status_code=303,
+        )
     return RedirectResponse(url="/deals", status_code=303)

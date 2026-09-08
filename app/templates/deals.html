@@ -1,13 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Underpriced Wines{% endblock %}
 {% block content %}
+{% if error %}
+<p class="error-banner">{{ error }}</p>
+{% endif %}
 <div class="deals-header">
   <h1>Underpriced Wines &mdash; Plumed Horse</h1>
   <form method="post" action="/refresh">
     <button type="submit">Refresh from Plumed Horse</button>
   </form>
 </div>
-<p class="subtitle">Comparing Plumed Horse's current wine list against Wine-Searcher's average retail price. "Below market" means the restaurant is charging <em>less</em> than Wine-Searcher's average retail &mdash; not adjusted for any expected restaurant markup.</p>
+<p class="subtitle">Comparing Plumed Horse's current wine list against Wine-Searcher's average retail price. "Below market" means the restaurant is charging <em>less</em> than Wine-Searcher's average retail &mdash; not adjusted for any expected restaurant markup.{% if last_refreshed %} Wine list last refreshed <strong>{{ last_refreshed }}</strong>.{% endif %}</p>
+<p class="summary">{{ below_market|length }} below market, {{ above_market|length }} at/above market, {{ needs_review|length }} without a usable reference price ({{ below_market|length + above_market|length + needs_review|length }} wines total).</p>
 
 <section>
   <h2>Below market price ({{ below_market|length }})</h2>
