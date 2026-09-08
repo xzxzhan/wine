@@ -1,22 +1,27 @@
 # Underpriced Wine Finder
 
-Finds wines priced below their Wine-Searcher average retail price. Working
+Finds wines priced below their Wine-Searcher market price. Working
 end-to-end for one restaurant so far: **Plumed Horse** (Saratoga, CA).
 
 ## Status
 
-Automated, working pipeline for Plumed Horse:
+Automated ingestion, incremental reference-price research:
 
-1. `app/ingest/plumedhorse.py` pulls the current wine list from Plumed
-   Horse's public WooCommerce Store API (the same data that powers
-   https://plumedhorse.com/wine/) — fully automated, no scraping involved,
-   safe to re-run any time.
-2. `data/reference_prices_plumedhorse.csv` holds Wine-Searcher average
-   retail prices for those wines, collected via a search-assisted lookup
-   pass (see "Why reference prices are a CSV, not a live call" below).
-3. `app/routers/deals.py` compares the two and the `/deals` page shows
-   wines **below market price**, sorted by how far below, with everything
-   else visible but secondary.
+1. **Listings** — two sources, both fully automated, no scraping-ToS issues:
+   - `app/ingest/plumedhorse.py` — a small ~20-bottle "to-go" retail
+     selection, from Plumed Horse's public WooCommerce Store API.
+   - `app/ingest/binwise.py` — the *real* sommelier cellar list, 2,418
+     wines (1,595 red + 823 white). It's not on the WordPress site at all
+     — Plumed Horse embeds it via plain iframes from a third-party
+     wine-list host, BinWise, as static server-rendered HTML:
+     `hub.binwise.com/Winelists/The-Plumed-Horse-{Red,White}-Wine-List.html`
+2. **Reference prices** — `data/reference_prices_plumedhorse.csv`, filled
+   in incrementally via search-assisted research (see methodology below),
+   priciest wines first (`app/ingest/worklist.py`). Only 31 of 2,436 wines
+   are covered as of the last research pass — this is genuinely
+   incomplete and grows over time, not a bug.
+3. `app/routers/deals.py` compares the two and `/deals` shows wines
+   **below market price**, sorted by how far below.
 
 Generalizing beyond Plumed Horse (new restaurants, K&L auctions, a real
 fuzzy-matching review queue) is future work — see Roadmap.
@@ -31,100 +36,125 @@ uvicorn app.main:app --reload
 ```
 
 Then open http://127.0.0.1:8000 — on a fresh/empty database it
-auto-bootstraps on startup (pulls the current Plumed Horse listings +
-loads the Wine-Searcher reference CSV), so `/deals` shows real data
-immediately. To pull fresh listings later, click **"Refresh from Plumed
-Horse"** on the page, or run the two ingestion steps directly:
+auto-bootstraps on startup (pulls current listings from both sources +
+loads the reference-price CSV). To pull fresh listings later, click
+**"Refresh from Plumed Horse"** on the page, or run directly:
 
 ```bash
-python -m app.ingest.plumedhorse       # pulls current listings
+python -m app.ingest.plumedhorse       # to-go shop listings
+python -m app.ingest.binwise           # full cellar list (2,400+ wines)
 python -m app.ingest.load_references   # loads WS reference prices from the CSV
+python -m app.ingest.worklist [N]      # prints the top-N wines still needing research, priciest first
 ```
 
-Re-running is safe/idempotent — it upserts by the wine's stable product id
-rather than creating duplicates.
+Re-running is safe/idempotent — both ingestors upsert by a stable
+`external_ref` rather than creating duplicates.
 
 ## How "below market price" is decided
 
 For each wine, `app/scoring.py:below_market_pct()` normalizes both the
 listing price and the Wine-Searcher reference price to a 750ml-equivalent
-(so a half-bottle listing compares fairly against a standard-bottle
-reference) and computes `(reference - listing) / reference`. Positive means
-the restaurant is charging **less** than Wine-Searcher's average retail —
-a literal comparison, with no assumption baked in about what markup a
+(so a half-bottle or magnum listing compares fairly against a
+standard-bottle reference) and computes `(reference - listing) /
+reference`. Positive means the restaurant is charging **less** than the
+reference — a literal comparison, no assumption about what markup a
 restaurant "should" charge.
 
-(`scoring.py` also has a markup-adjusted `score_listing()`/`expected_price()`
-path left over from early design, useful later if this generalizes to many
-restaurants where "is this a good price *for a restaurant*" — i.e. relative
-to an expected 2-3x markup — becomes the more useful question than "is this
-below retail." The `/deals` page currently uses the literal comparison.)
+## Reference-price methodology (what counts as "market price")
 
-## Why reference prices are a CSV, not a live call
+Wine-Searcher blocks automated fetches directly (confirmed 403) and its
+ToS prohibits scraping, and there's no per-store itemized data available
+without a paid Pro subscription. What's actually achievable via
+search-assisted lookup, best to worst, and how it's labeled in the
+`confidence`/`note` columns of the CSV:
 
-Wine-Searcher blocks automated fetches (confirmed 403 on a direct request)
-and their ToS prohibits scraping. There's no way for this app's backend to
-look up a price live without either a paid Wine-Searcher Pro API
-subscription or violating their terms. What's implemented instead:
-`data/reference_prices_plumedhorse.csv`, populated via a search-assisted
-pass (an agent or person searching for "<wine> wine-searcher average
-price" and reading indexed snippets — not hitting wine-searcher.com
-directly) — with a `confidence` and `note` column per entry, since the
-match often isn't exact:
+1. **Itemized average of the lowest CA/US-shippable store prices**
+   (`confidence: high`) — when individual retailer prices surface (e.g.
+   "GRW Wine Collection $3995, Malibu Liquor & Wine $3999.95, WineBank
+   $4200"), average up to 3 of the lowest. This is the real target: what
+   it would actually cost to buy the wine shipped to California. Rare in
+   practice — mostly surfaces for very famous, heavily-indexed wines.
+2. **Wine-Searcher's own California- or USA-region-filtered average**
+   (`confidence: medium`) — not itemized, but excludes overseas-only
+   markets. This is the common case.
+3. **Wine-Searcher's global average** (`confidence: low`) — used only as
+   a last resort when no US/CA-specific figure exists, explicitly noted
+   as "not available in CA/USA" since it can include pricing from markets
+   (Europe especially) the diner can't actually buy from. A global-only
+   figure is a real methodological compromise, not a preference — it's
+   there so the wine isn't silently dropped, but should be trusted less.
+4. **No usable price found at all** — left blank, shown in "Needs review"
+   on `/deals` rather than guessed at.
 
-- **high** — vintage-specific match, no ambiguity
-- **medium** — right wine, but the price is an all-vintages average, a
-  currency conversion, or a same-family second-label guess
-- **low** — plausible but uncertain match (ambiguous vineyard/cuvée naming)
-- blank price — no reliable Wine-Searcher price found at all; shown in the
-  "Needs review" section on `/deals` rather than silently dropped
-
-4 of the current 20 Plumed Horse wines have no usable reference at all —
-one doesn't match any real bottling from that producer (likely a data
-error on the restaurant's own list), one is a renamed second-label wine
-with no price under either name for that vintage, and two have no
-confident Wine-Searcher match. This is the real-world wine-matching
-problem the original plan flagged, showing up immediately on real data.
+`confidence: none` is reserved for cases where the wine itself doesn't
+seem to exist as described (see "known data issues" below) — not a
+pricing gap but a listing/matching problem.
 
 `app/ingest/load_references.py` is the seam: swap it for a real
-Wine-Searcher API call later and nothing downstream (scoring, `/deals`)
-needs to change, since both only ever read `ReferencePrice` rows.
+Wine-Searcher Pro API call later and nothing downstream (scoring,
+`/deals`) needs to change, since both only ever read `ReferencePrice`
+rows.
+
+### The local price cache and its 2-month TTL
+
+`ReferencePrice.date_captured` is a "last updated" timestamp.
+`app/ingest/worklist.py` (`is_stale_or_missing`) treats a wine as needing
+a fresh Wine-Searcher lookup only if it's never been looked up, or its
+most recent lookup is 60+ days old — so re-running research doesn't
+re-query wines that are still fresh. This *is* the local Wine-Searcher
+price database the project needs; there's no separate cache structure.
+
+### Known data issues found so far
+
+- One listing (`CAYMUS, 2022 (1000 ml)` at **$98,500**) is almost
+  certainly a data-entry error on the restaurant's own list — real
+  Wine-Searcher pricing for 2022 Caymus tops out around $88-93/750ml, so
+  even at 1000ml this should be roughly $985, not $98,500. Left as-is
+  (not "corrected") since it's the restaurant's actual listed price; it
+  will just show as a wildly-above-market outlier, which is accurate.
+- 4 of the original 20 to-go wines have no usable reference at all —
+  see git history for details (a nonexistent bottling, a renamed
+  second-label wine, etc.) — the real-world wine-matching problem the
+  original plan flagged, showing up immediately on real data.
 
 ## Data model
 
 - `Wine` — producer, wine name, region (display only; not used for matching)
-- `WineVintage` — a wine + vintage year. Has an `external_ref` (e.g.
-  `"plumedhorse:3225"`) — the stable id from an automated source, used to
-  re-match on refresh without fuzzy text matching.
+- `WineVintage` — a wine + vintage year. Has an `external_ref` — the
+  stable id from an automated source (a WooCommerce product id, or for
+  BinWise a content hash of the listing text, since BinWise exposes no
+  real id) — used to re-match on refresh without fuzzy text matching.
 - `ReferencePrice` — a Wine-Searcher price snapshot for a `WineVintage`,
-  with its own `bottle_size_ml`, `confidence`, and `note`
+  with its own `bottle_size_ml`, `confidence`, `note`, and
+  `date_captured` (the cache timestamp)
 - `Listing` — an observed price for a `WineVintage` from a restaurant (or
   auction), with its own `bottle_size_ml` and the original raw text kept
 - `WineAlias` — (unused so far) for a future free-text fuzzy-matching
-  pipeline, once this generalizes to restaurants without a public API
+  pipeline, once this generalizes to restaurants without any structured
+  source at all (e.g. a PDF-only wine list)
 
 Bottle size lives on `ReferencePrice`/`Listing`, not `WineVintage` — the
 same wine+vintage can appear in multiple formats (375ml, 750ml, magnum),
-each independently priced. An earlier version stored it on the vintage and
-incorrectly assumed a listing and its reference always shared the same
-bottle size — caught when the Pierre Gimonnet half-bottle test case showed
-an inflated discount.
+each independently priced.
 
 ## Manual entry (still supported)
 
 The original manual-entry flow (`/wines` — add wines/vintages/reference
 prices/listings by hand) still works, useful for testing or for a
-restaurant without a public product API.
+restaurant without any structured source.
 
 ## Roadmap
 
-- **Generalize ingestion**: most restaurants don't expose a WooCommerce
-  API like Plumed Horse does — the common case will be a PDF wine list,
-  needing text/OCR extraction and fuzzy matching (`WineAlias`) instead of
-  a stable `external_ref`.
+- **Keep researching reference prices**: 31/2,436 wines covered as of the
+  last pass. Run `python -m app.ingest.worklist` for the next priciest
+  batch still needing a lookup.
+- **Generalize ingestion**: most restaurants won't have a BinWise/
+  WooCommerce API — the common case will be a PDF wine list, needing
+  text/OCR extraction and fuzzy matching (`WineAlias`) instead of a
+  stable `external_ref`.
 - **K&L auction listings**: same idea as Plumed Horse's ingestion — check
   `robots.txt`/ToS, then pull structured auction data on a schedule.
 - **Multi-restaurant / multi-source dashboard**: `/deals` currently only
   shows Plumed Horse; generalize once a second source exists.
-- **Wine-Searcher access**: revisit a Pro API subscription if this scales
-  beyond occasional search-assisted lookups.
+- **Wine-Searcher access**: revisit a Pro API subscription if research
+  volume outgrows search-assisted lookups.
