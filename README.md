@@ -17,7 +17,7 @@ Automated ingestion, incremental reference-price research:
      `hub.binwise.com/Winelists/The-Plumed-Horse-{Red,White}-Wine-List.html`
 2. **Reference prices** — `data/reference_prices_plumedhorse.csv`, filled
    in incrementally via search-assisted research (see methodology below),
-   priciest wines first (`app/ingest/worklist.py`). Only 31 of 2,436 wines
+   priciest wines first (`app/ingest/worklist.py`). Only 43 of 2,436 wines
    are covered as of the last research pass — this is genuinely
    incomplete and grows over time, not a bug.
 3. `app/routers/deals.py` compares the two and `/deals` shows wines
@@ -49,6 +49,41 @@ python -m app.ingest.worklist [N]      # prints the top-N wines still needing re
 
 Re-running is safe/idempotent — both ingestors upsert by a stable
 `external_ref` rather than creating duplicates.
+
+## Automated reference-price research (Google Custom Search)
+
+Manually searching for each wine (as done for the first ~59 wines) doesn't
+scale to 2,400+. `app/ingest/search_reference_prices.py` automates it
+using the Google Custom Search JSON API — no agent/human in the loop.
+Wine-Searcher's own pages contain literal text like `Avg Price (ex-tax)
+$240 / 750ml`, which Google indexes verbatim into the search snippet; the
+script regexes that pattern directly out of wine-searcher.com results and
+applies the same California > USA > global region-preference policy
+described above.
+
+**One-time setup** (needs your own Google account — free tier covers 100
+queries/day; full 2,400-wine coverage costs roughly $0-12 total at $5 per
+1,000 queries beyond that, vs. Wine-Searcher Pro's $335/month):
+
+1. https://console.cloud.google.com/ → create/select a project → APIs &
+   Services → Library → enable **"Custom Search API"**
+2. APIs & Services → Credentials → Create Credentials → API Key
+3. https://programmablesearchengine.google.com/ → create a search engine,
+   set it to **"Search the entire web"** → copy its **Search engine ID** (cx)
+4. `export GOOGLE_SEARCH_API_KEY=...` and `export GOOGLE_SEARCH_CSE_ID=...`
+
+**Usage:**
+
+```bash
+python -m app.ingest.search_reference_prices --limit 90 --min-price 100
+```
+
+Respects the same 2-month staleness policy as everything else (via
+`build_worklist()`), so re-running never re-queries a wine that's still
+fresh. `--limit` caps how many wines it researches per run (default 90,
+under the 100/day free tier); `--min-price` skips cheap wines to
+prioritize the highest-value ones first; `--sleep` controls the delay
+between queries (default 1s).
 
 ## How "below market price" is decided
 
@@ -145,7 +180,7 @@ restaurant without any structured source.
 
 ## Roadmap
 
-- **Keep researching reference prices**: 31/2,436 wines covered as of the
+- **Keep researching reference prices**: 43/2,436 wines covered as of the
   last pass. Run `python -m app.ingest.worklist` for the next priciest
   batch still needing a lookup.
 - **Generalize ingestion**: most restaurants won't have a BinWise/
