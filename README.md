@@ -30,17 +30,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Then open http://127.0.0.1:8000/deals — it's empty until you run the
-ingestion once:
+Then open http://127.0.0.1:8000 — on a fresh/empty database it
+auto-bootstraps on startup (pulls the current Plumed Horse listings +
+loads the Wine-Searcher reference CSV), so `/deals` shows real data
+immediately. To pull fresh listings later, click **"Refresh from Plumed
+Horse"** on the page, or run the two ingestion steps directly:
 
 ```bash
 python -m app.ingest.plumedhorse       # pulls current listings
 python -m app.ingest.load_references   # loads WS reference prices from the CSV
 ```
 
-or just click **"Refresh from Plumed Horse"** on the `/deals` page, which
-does both. Re-running is safe/idempotent — it upserts by the wine's stable
-product id rather than creating duplicates.
+Re-running is safe/idempotent — it upserts by the wine's stable product id
+rather than creating duplicates.
 
 ## How "below market price" is decided
 
